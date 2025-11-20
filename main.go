@@ -281,6 +281,11 @@ func runHealthCheck(address string) {
 			path = target[idx:]
 		}
 
+		// If no port is specified, default to 80 for http.
+		if !strings.Contains(host, ":") {
+			host = host + ":80"
+		}
+
 		conn, err := net.DialTimeout("tcp", host, timeout)
 		if err != nil {
 			log.Printf("HTTP check failed: %v", err)
