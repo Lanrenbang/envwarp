@@ -22,6 +22,18 @@ import (
 // version is set at build time
 var version string
 
+// stringSlice is a custom flag type to support multiple env files
+type stringSlice []string
+
+func (i *stringSlice) String() string {
+	return strings.Join(*i, ", ")
+}
+
+func (i *stringSlice) Set(value string) error {
+	*i = append(*i, value)
+	return nil
+}
+
 const (
 	filePrefix = "file."
 )
@@ -30,17 +42,19 @@ func main() {
 	log.SetPrefix("[envwarp] ")
 	log.SetFlags(0)
 
-	// Subcommands
+	// --- Flag definitions ---
+	var envFiles stringSlice
 	checkCmd := flag.NewFlagSet("check", flag.ExitOnError)
 
 	// Top-level flags
 	versionFlag := flag.Bool("v", false, "print version and exit")
-	envFile := flag.String("e", "", "path to a custom environment file")
+	flag.BoolVar(versionFlag, "version", false, "print version and exit") // Long form for version
 
-	// Manual flag parsing for long-form variants
-	handleLongFlags()
+	// Custom var for repeated -e/--env flags
+	flag.Var(&envFiles, "e", "path to a custom environment file (can be specified multiple times)")
+	flag.Var(&envFiles, "env", "path to a custom environment file (can be specified multiple times)")
 
-	// Handle subcommands first
+	// Handle subcommands first, as they have their own logic
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
 		case "check":
@@ -69,14 +83,14 @@ func main() {
 		os.Exit(0)
 	}
 
-	// Main logic starts here
+	// --- Main logic starts here ---
 	var originalEnv []string
-	if *envFile != "" {
-		log.Printf("Loading custom environment from: %s", *envFile)
+	if len(envFiles) > 0 {
+		log.Printf("Loading custom environment files: %s", envFiles.String())
 		originalEnv = os.Environ()
-		err := godotenv.Load(*envFile)
-		if err != nil {
-			log.Fatalf("Error: Failed to load custom environment file: %v", err)
+		// Use Overload to ensure later files override earlier ones
+		if err := godotenv.Overload(envFiles...); err != nil {
+			log.Fatalf("Error: Failed to load custom environment files: %v", err)
 		}
 	}
 
@@ -105,23 +119,6 @@ func main() {
 	if executionCmd != "" {
 		executeCommand(executionCmd, originalEnv)
 	}
-}
-
-// handleLongFlags maps long-form flags to their short-form equivalents for the standard flag package.
-func handleLongFlags() {
-	newArgs := make([]string, 0, len(os.Args))
-	newArgs = append(newArgs, os.Args[0]) // Keep command name
-	for _, arg := range os.Args[1:] {
-		switch arg {
-		case "--version":
-			newArgs = append(newArgs, "-v")
-		case "--env":
-			newArgs = append(newArgs, "-e")
-		default:
-			newArgs = append(newArgs, arg)
-		}
-	}
-	os.Args = newArgs
 }
 
 // processSecrets iterates over environment variables and replaces secret references.
