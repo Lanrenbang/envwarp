@@ -88,9 +88,29 @@ func main() {
 	if len(envFiles) > 0 {
 		log.Printf("Loading custom environment files: %s", envFiles.String())
 		originalEnv = os.Environ()
-		// Use Overload to ensure later files override earlier ones
-		if err := godotenv.Overload(envFiles...); err != nil {
-			log.Fatalf("Error: Failed to load custom environment files: %v", err)
+
+		// This is the final, correct logic inspired by user feedback.
+		// Each env file is treated as a template and expanded before being parsed.
+		// This allows values in one file to reference values loaded from a previous file.
+		for _, file := range envFiles {
+			// 1. Expand the env file itself.
+			content, err := envsubst.ReadFile(file)
+			if err != nil {
+				log.Fatalf("Error reading/substituting env file %s: %v", file, err)
+			}
+
+			// 2. Parse the now-expanded content into a map.
+			envMap, err := godotenv.Unmarshal(string(content))
+			if err != nil {
+				log.Fatalf("Error unmarshaling env file %s: %v", file, err)
+			}
+
+			// 3. Set the parsed variables into the current process environment.
+			for key, value := range envMap {
+				if err := os.Setenv(key, value); err != nil {
+					log.Fatalf("Error setting env var %s from file %s: %v", key, file, err)
+				}
+			}
 		}
 	}
 
