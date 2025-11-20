@@ -1,0 +1,46 @@
+# .github/workflows/slsa-build.yml
+name: '📦 SLSA go releaser'
+on:
+  release:
+    types: [published]
+
+permissions: read-all
+
+jobs:
+  args:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ldflags.outputs.version }}
+    steps:
+      - name: 'Checkout repository'
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+        with:
+          fetch-depth: 0
+      - id: ldflags
+        run: |
+          echo "version=$(git describe --tags --always --dirty | cut -c2-)" >> "$GITHUB_OUTPUT"
+
+  # Trusted builder.
+  build:
+    permissions:
+      id-token: write # To sign the provenance.
+      contents: write # To upload assets to release.
+      actions: read # To read the workflow path.
+    strategy:
+      matrix:
+        os:
+          - linux
+          - windows
+          - darwin
+        arch:
+          - amd64
+          - arm64
+    needs: args
+    uses: slsa-framework/slsa-github-generator/.github/workflows/builder_go_slsa3.yml@v2.1.0 # must semantic version
+    with:
+      config-file: ./.github/slsa/${{matrix.os}}-${{matrix.arch}}.yml
+      go-version-file: ./go.mod
+      upload-assets: true
+      draft-release: false
+      upload-tag-name: ${{ github.event.release.tag_name }}
+      evaluated-envs: "VERSION:${{needs.args.outputs.version}}"
