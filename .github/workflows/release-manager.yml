@@ -1,0 +1,58 @@
+# .github/workflows/release-manager.yml
+name: '🚀 Release Manager'
+
+on:
+  push:
+    branches:
+      - main
+  pull_request: # for autolabeler
+    types:
+      - opened
+      - reopened
+      - synchronize
+
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Publish the draft as an official release?'
+        type: boolean
+        required: true
+        default: false
+      prerelease_suffix:
+        description: 'Optional: Suffix for pre-release (e.g., "rc.1", "beta"). Leave empty for a full release.'
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  draft-or-publish:
+    permissions:
+      contents: write
+      pull-requests: write  # write for autolabeler, otherwise read
+      id-token: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: 'Update Release Draft'
+        id: drafter
+        uses: release-drafter/release-drafter@b1476f6e6eb133afa41ed8589daba6dc69b4d3f5  # v6.1.0
+        with:
+          # https://github.com/release-drafter/release-drafter/issues/1125
+          commitish: main 
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 'Publish the Release'
+        if: |
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.publish) ||
+          (github.event_name == 'push' && contains(github.event.head_commit.message, 'feat(deps): sync upstream'))
+        uses: release-drafter/release-drafter@b1476f6e6eb133afa41ed8589daba6dc69b4d3f5  # v6.1.0
+        with:
+          publish: true
+          commitish: main
+          tag: ${{ github.event.inputs.prerelease_suffix && format('{0}-{1}', steps.drafter.outputs.tag_name, github.event.inputs.prerelease_suffix) || steps.drafter.outputs.tag_name }}
+          name: ${{ github.event.inputs.prerelease_suffix && format('{0}-{1}', steps.drafter.outputs.name, github.event.inputs.prerelease_suffix) || steps.drafter.outputs.name }}
+          prerelease: ${{ github.event.inputs.prerelease_suffix != '' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.ACTIONS_PAT }} # must for release
