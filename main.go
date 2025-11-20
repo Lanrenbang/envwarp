@@ -89,26 +89,34 @@ func main() {
 		log.Printf("Loading custom environment files: %s", envFiles.String())
 		originalEnv = os.Environ()
 
-		// This is the final, correct logic inspired by user feedback.
-		// Each env file is treated as a template and expanded before being parsed.
-		// This allows values in one file to reference values loaded from a previous file.
+		// Outer loop: process each file sequentially.
 		for _, file := range envFiles {
-			// 1. Expand the env file itself.
-			content, err := envsubst.ReadFile(file)
-			if err != nil {
-				log.Fatalf("Error reading/substituting env file %s: %v", file, err)
-			}
+			// Inner loop: process each file multiple times to resolve nested variables within the same file.
+			for i := 0; i < 5; i++ { // Limit to 5 passes to prevent infinite loops.
+				changedCounter := 0
 
-			// 2. Parse the now-expanded content into a map.
-			envMap, err := godotenv.Unmarshal(string(content))
-			if err != nil {
-				log.Fatalf("Error unmarshaling env file %s: %v", file, err)
-			}
+				content, err := envsubst.ReadFile(file)
+				if err != nil {
+					log.Fatalf("Error reading/substituting env file %s: %v", file, err)
+				}
 
-			// 3. Set the parsed variables into the current process environment.
-			for key, value := range envMap {
-				if err := os.Setenv(key, value); err != nil {
-					log.Fatalf("Error setting env var %s from file %s: %v", key, file, err)
+				envMap, err := godotenv.Unmarshal(string(content))
+				if err != nil {
+					log.Fatalf("Error unmarshaling env file %s: %v", file, err)
+				}
+
+				for key, value := range envMap {
+					oldValue := os.Getenv(key)
+					if oldValue != value {
+						changedCounter++
+					}
+					if err := os.Setenv(key, value); err != nil {
+						log.Fatalf("Error setting env var %s from file %s: %v", key, file, err)
+					}
+				}
+
+				if changedCounter == 0 {
+					break // File is stable, move to the next file.
 				}
 			}
 		}
