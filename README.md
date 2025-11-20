@@ -63,11 +63,13 @@ export ENVWARP_EXECUTION="nginx -g 'daemon off;'"
 
 ### Using a Custom Environment File
 
-Use the `-e` or `--env` flag to specify a file containing environment variables for templating only. This prevents these variables from being passed to the process specified by `ENVWARP_EXECUTION`.
+Use the `-e` or `--env` flag to specify one or more files containing environment variables for templating only. This prevents these variables from being passed to the process specified by `ENVWARP_EXECUTION`.
+
+The flag can be specified multiple times for layering configurations. Variables in files specified later will override those from earlier files.
 
 ```sh
-# variables in custom.env are only used for templating
-./envwarp -e custom.env
+# Load base.env first, then override with variables from production.env
+./envwarp -e base.env --env production.env
 ```
 
 > **Note on Container Usage:**
