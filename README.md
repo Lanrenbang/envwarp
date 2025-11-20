@@ -1,3 +1,6 @@
+[![📦 SLSA go releaser](https://github.com/Lanrenbang/envwarp/actions/workflows/slsa-build.yml/badge.svg)](https://github.com/Lanrenbang/envwarp/actions/workflows/slsa-build.yml)
+[![SLSA 3](https://slsa.dev/images/gh-badge-level3.svg)](https://slsa.dev)
+
 # envwarp
 
 A lightweight, zero-dependency utility for environment variable substitution in template files, with support for secret injection and command chaining. Designed for containerized environments.
