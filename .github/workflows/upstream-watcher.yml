@@ -1,0 +1,35 @@
+name: '🤖 Upstream Watcher'
+
+on:
+  schedule:
+    - cron: '0 23 * * *'
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  check-and-update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 'Checkout repository'
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3  # v6.0.0
+
+      - name: 'Run upstream checker'
+        id: checker
+        uses: Lanrenbang/.github/.github/actions/upstream-checker@98067310fd58ed6ba0a05bb926f97de1658c0c86  # v1.5.0
+        with:
+          repositories: |
+            [
+              {"repo": "a8m/envsubst"},
+              {"repo": "joho/godotenv"}
+            ]
+          state_file: '.github/upstream-versions.txt'
+          token: ${{ secrets.BOT_PAT }}
+          pr_labels: 'chore'
+
+      - name: 'Trigger release via repository-dispatch'
+        if: steps.checker.outputs.has_updates == 'true'
+        uses: peter-evans/repository-dispatch@28959ce8df70de7be546dd1250a005dd32156697  # v4.0.1
+        with:
+          token: ${{ secrets.BOT_PAT }}
+          event-type: upstream-updated
+          client-payload: '{ "triggered_by": "upstream-watcher" }'
+
