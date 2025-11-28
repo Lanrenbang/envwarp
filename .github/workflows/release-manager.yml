@@ -18,10 +18,14 @@ on:
         type: boolean
         required: true
         default: false
-      prerelease_suffix:
-        description: 'Optional: Suffix for pre-release (e.g., "rc.1", "beta"). Leave empty for a full release.'
-        type: string
+      prerelease-identifier:
+        description: |
+          A string indicating an identifier (alpha, beta, rc, etc), to increment the prerelease version.
         required: false
+        default: ''
+
+  repository_dispatch:
+    types: [upstream-updated]
 
 permissions:
   contents: read
@@ -31,28 +35,60 @@ jobs:
     permissions:
       contents: write
       pull-requests: write  # write for autolabeler, otherwise read
-      id-token: write
     runs-on: ubuntu-latest
     steps:
-      - name: 'Update Release Draft'
-        id: drafter
+      - name: 'Determine release parameters'
+        id: params
+        shell: bash
+        run: |
+          PUBLISH=false
+          PRERELEASE=false
+          PRERELEASE_ID=""
+          
+          echo "📋 Event: ${{ github.event_name }}"
+          
+          case "${{ github.event_name }}" in
+            workflow_dispatch)
+              if [[ "${{ inputs.publish }}" == "true" ]]; then
+                PUBLISH=true
+                echo "   ✓ Will publish release"
+                
+                if [[ -n "${{ inputs.prerelease-identifier }}" ]]; then
+                  PRERELEASE=true
+                  PRERELEASE_ID="${{ inputs.prerelease-identifier }}"
+                  echo "   ✓ Prerelease: $PRERELEASE_ID"
+                fi
+              fi
+              ;;
+            
+            repository_dispatch)
+              TRIGGERED_BY="${{ github.event.client_payload.triggered_by }}"
+              echo "   Repository dispatch from: $TRIGGERED_BY"
+              if [[ "$TRIGGERED_BY" == "upstream-watcher" ]]; then
+                PUBLISH=true
+                echo "   ✓ Upstream update detected, will publish release"
+              fi
+              ;;
+            *)
+              echo "   Standard event, updating draft only"
+              ;;
+          esac
+          
+          {
+            echo "publish=$PUBLISH"
+            echo "prerelease=$PRERELEASE"
+            echo "prerelease_id=$PRERELEASE_ID"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: 'Run Release Draft'
         uses: release-drafter/release-drafter@b1476f6e6eb133afa41ed8589daba6dc69b4d3f5  # v6.1.0
         with:
           # https://github.com/release-drafter/release-drafter/issues/1125
-          commitish: main 
+          commitish: ${{ github.event.repository.default_branch }}
+          publish: ${{ steps.params.outputs.publish }}
+          prerelease: ${{ steps.params.outputs.prerelease }}
+          prerelease-identifier: ${{ steps.params.outputs.prerelease_id }}
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # GITHUB_TOKEN cannot trigger a new workflow.
+          GITHUB_TOKEN: ${{ steps.params.outputs.publish == 'true' && secrets.BOT_PAT || secrets.GITHUB_TOKEN }}
 
-      - name: 'Publish the Release'
-        if: |
-          (github.event_name == 'workflow_dispatch' && github.event.inputs.publish) ||
-          (github.event_name == 'push' && contains(github.event.head_commit.message, 'feat(deps): sync upstream'))
-        uses: release-drafter/release-drafter@b1476f6e6eb133afa41ed8589daba6dc69b4d3f5  # v6.1.0
-        with:
-          publish: true
-          commitish: main
-          tag: ${{ github.event.inputs.prerelease_suffix && format('{0}-{1}', steps.drafter.outputs.tag_name, github.event.inputs.prerelease_suffix) || steps.drafter.outputs.tag_name }}
-          name: ${{ github.event.inputs.prerelease_suffix && format('{0}-{1}', steps.drafter.outputs.name, github.event.inputs.prerelease_suffix) || steps.drafter.outputs.name }}
-          prerelease: ${{ github.event.inputs.prerelease_suffix != '' }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.ACTIONS_PAT }} # must for release
