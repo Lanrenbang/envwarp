@@ -1,0 +1,6 @@
+# Upstream dependency versions
+# Format: owner/repo sha tag check_type
+# Updated: 2025-11-28 08:12:13 UTC
+
+a8m/envsubst 2aa6422a5466ee701933dd838d9d36aaf16a0b32 v1.4.3 release
+joho/godotenv 3fc4292b58a67b78e1dbb6e47b4879a6cc602ec4 v1.5.1 release
