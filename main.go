@@ -120,6 +120,21 @@ func main() {
 				}
 			}
 		}
+
+		// NEW: Build merged environment for command execution.
+		// For keys that existed in the original system environment,
+		// use the (potentially updated) values from env files.
+		// Keys that only exist in env files are NOT carried over.
+		mergedEnv := make([]string, 0, len(originalEnv))
+		for _, entry := range originalEnv {
+			parts := strings.SplitN(entry, "=", 2)
+			if len(parts) >= 1 {
+				key := parts[0]
+				mergedEnv = append(mergedEnv, key+"="+os.Getenv(key))
+			}
+		}
+		originalEnv = mergedEnv
+
 	}
 
 	// Process secrets after loading env vars
